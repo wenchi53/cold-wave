@@ -91,12 +91,8 @@
         window.location = 'browserWarning.html';
       }
 
-      // Check for mobile
-      if(Engine.isMobile()) {
-        window.location = 'mobileWarning.html';
-      }
-
       Engine.disableSelection();
+      Engine.initTouch();
 
       if(this.options.state != null) {
         window.State = this.options.state;
@@ -131,6 +127,8 @@
           .appendTo(selectOptions);
         $('<li>')
           .text("language.")
+          // hover opens the list on desktop; touch screens need a tap
+          .on("click", function() { customSelect.toggleClass('open'); })
           .appendTo(optionsList);
 
         $.each(langs, function(name,display){
@@ -211,6 +209,9 @@
       swipeElement.on('swipeup', Engine.swipeUp);
       swipeElement.on('swipedown', Engine.swipeDown);
 
+      // Panel widths depend on the screen size on phones
+      $(window).on('resize orientationchange', Engine.onResize);
+
       // subscribe to stateUpdates
       $.Dispatch('stateUpdate').subscribe(Engine.handleStateUpdates);
 
@@ -267,6 +268,129 @@
 
     isMobile: function() {
       return ( location.search.indexOf( 'ignorebrowser=true' ) < 0 && /Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test( navigator.userAgent ) );
+    },
+
+    // Desktop keeps the original fixed 700px panels. Below NARROW_QUERY
+    // (phones, small tablets, narrow windows) css/mobile.css switches to a
+    // single column and every panel is as wide as #content.
+    PANEL_WIDTH: 700,
+    NARROW_QUERY: '(max-width: 939px)',
+
+    isNarrow: function() {
+      return !!(window.matchMedia && window.matchMedia(Engine.NARROW_QUERY).matches);
+    },
+
+    isTouch: function() {
+      return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    },
+
+    panelWidth: function() {
+      return Engine.isNarrow() ? Math.floor($('#content').width()) : Engine.PANEL_WIDTH;
+    },
+
+    // Phones have no hover: tapping a row that carries a tooltip (stores,
+    // workers, supplies, perks...) toggles it. Button costs are shown inline
+    // by css/mobile.css instead, so a tap on a button still just presses it.
+    initTouch: function() {
+      if(!Engine.isTouch()) {
+        return;
+      }
+      $(document).on('click', function(e) {
+        var holder = null;
+        if(!$(e.target).closest('.button, #map, .upBtn, .dnBtn, .upManyBtn, .dnManyBtn').length) {
+          for(var el = e.target; el && el !== document.body; el = el.parentNode) {
+            if($(el).children('div.tooltip').length) {
+              holder = el;
+              break;
+            }
+          }
+        }
+        $('.tooltipOpen').not(holder).removeClass('tooltipOpen');
+        if(holder) {
+          $(holder).toggleClass('tooltipOpen');
+        }
+      });
+    },
+
+    // Called whenever Engine.activeModule changes (see the property at the
+    // bottom of this file). Desktop is untouched apart from body classes.
+    applyActiveLayout: function() {
+      var module = Engine.activeModule;
+      if(!module) {
+        return;
+      }
+      var narrow = Engine.isNarrow();
+      var inMain = !!(module.panel && module.panel.parent().is('#locationSlider'));
+      $('.location').removeClass('activePanel');
+      if(module.panel) {
+        module.panel.addClass('activePanel');
+      }
+      $('#main').toggleClass('activePanel', inMain);
+      $('body')
+        .toggleClass('inWorld', typeof World != 'undefined' && module === World)
+        .toggleClass('inSpace', typeof Space != 'undefined' && module === Space);
+
+      // The stores panel normally slides along with the panels so it seems
+      // to stay put. In the single column it lives under the active panel.
+      var stores = $('#storesContainer');
+      if(stores.length) {
+        if(narrow && inMain) {
+          stores.appendTo(module.panel);
+        } else if(!narrow && !stores.parent().is('#roomPanel')) {
+          stores.prependTo('#roomPanel');
+        }
+      }
+      Engine.fitSpace();
+    },
+
+    // The asteroid field is 700x700 game units; on a phone it is scaled down.
+    fitSpace: function() {
+      var space = $('#spacePanel');
+      var content = $('#content');
+      if(space.length && $('body').hasClass('inSpace') && Engine.isNarrow()) {
+        var scale = Math.min(1, content.width() / Engine.PANEL_WIDTH);
+        space.css({transform: 'scale(' + scale + ')', transformOrigin: '0 0'});
+        content.css({height: Math.ceil(Engine.PANEL_WIDTH * scale) + 'px', overflow: 'hidden'});
+      } else {
+        space.css({transform: '', transformOrigin: ''});
+        content.css({height: '', overflow: ''});
+      }
+    },
+
+    sizePanels: function() {
+      var width = Engine.isNarrow() ? Engine.panelWidth() + 'px' : '';
+      $('#locationSlider > div.location, #outerSlider > div').not('#spacePanel').css('width', width);
+    },
+
+    _resizeTimer: null,
+    _lastWidth: null,
+
+    onResize: function() {
+      // phones fire resize when the address bar hides; only width matters
+      if(window.innerWidth === Engine._lastWidth) {
+        return;
+      }
+      Engine._lastWidth = window.innerWidth;
+      clearTimeout(Engine._resizeTimer);
+      Engine._resizeTimer = setTimeout(Engine.relayout, 150);
+    },
+
+    // Put the sliders back where they belong for the current panel width.
+    relayout: function() {
+      var module = Engine.activeModule;
+      var width = Engine.panelWidth();
+      Engine.updateSlider();
+      Engine.updateOuterSlider();
+      if(module && module.panel && module.panel.parent().is('#locationSlider')) {
+        var panelIndex = $('.location').index(module.panel);
+        $('#locationSlider').stop(true, true).css('left', -(panelIndex * width) + 'px');
+        $('#storesContainer').stop(true, true).css('right', Engine.isNarrow() ? '' : -(panelIndex * width) + 'px');
+      }
+      if(typeof World != 'undefined' && module === World) {
+        $('#outerSlider').stop(true, true).css('left', -width + 'px');
+        World.fitMap();
+      }
+      Engine.applyActiveLayout();
     },
 
     saveGame: function() {
@@ -611,11 +735,12 @@
       var stores = $('#storesContainer');
       var panelIndex = $('.location').index(module.panel);
       var diff = Math.abs(panelIndex - currentIndex);
-      slider.animate({left: -(panelIndex * 700) + 'px'}, 300 * diff);
+      var width = Engine.panelWidth();
+      slider.animate({left: -(panelIndex * width) + 'px'}, 300 * diff);
 
-      if($SM.get('stores.wood') !== undefined) {
+      if($SM.get('stores.wood') !== undefined && !Engine.isNarrow()) {
         // FIXME Why does this work if there's an animation queue...?
-        stores.animate({right: -(panelIndex * 700) + 'px'}, 300 * diff);
+        stores.animate({right: -(panelIndex * width) + 'px'}, 300 * diff);
       }
 
       if(Engine.activeModule == Room || Engine.activeModule == Path || Engine.activeModule == Fabricator) {
@@ -671,12 +796,14 @@
 
     updateSlider: function() {
       var slider = $('#locationSlider');
-      slider.width((slider.children().length * 700) + 'px');
+      Engine.sizePanels();
+      slider.width((slider.children().length * Engine.panelWidth()) + 'px');
     },
 
     updateOuterSlider: function() {
       var slider = $('#outerSlider');
-      slider.width((slider.children().length * 700) + 'px');
+      Engine.sizePanels();
+      slider.width((slider.children().length * Engine.panelWidth()) + 'px');
     },
 
     getIncomeMsg: function(num, delay) {
@@ -852,6 +979,20 @@
 
     }
   };
+
+  // Every module switch goes through this setter (some modules assign
+  // Engine.activeModule directly instead of calling travelTo), so the phone
+  // layout can follow the active panel.
+  var activeModule = null;
+  Object.defineProperty(Engine, 'activeModule', {
+    configurable: true,
+    enumerable: true,
+    get: function() { return activeModule; },
+    set: function(module) {
+      activeModule = module;
+      Engine.applyActiveLayout();
+    }
+  });
 
   function eventNullifier(e) {
     return $(e.target).hasClass('menuBtn');

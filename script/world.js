@@ -188,6 +188,8 @@ var World = {
 
     Engine.updateOuterSlider();
 
+    World.createDpad();
+
     // Map the ship and show compass tooltip
     World.ship = World.mapSearch(World.TILE.SHIP,$SM.get('game.world.map'),1);
     World.dir = World.compassDir(World.ship[0]);
@@ -378,6 +380,7 @@ var World = {
     World.narrateMove(oldTile, World.state.map[World.curPos[0]][World.curPos[1]]);
     World.lightMap(World.curPos[0], World.curPos[1], World.state.mask);
     World.drawMap();
+    World.keepPlayerVisible();
     World.doSpace();
 
     // play random footstep
@@ -416,20 +419,101 @@ var World = {
     }
   },
 
+  // On phones the page scrolls, so only swipes that start on the map move
+  // the wanderer (#map has touch-action: none there).
+  swipeAllowed: function(e) {
+    return !Engine.isNarrow() || $(e.target).closest('#map').length > 0;
+  },
+
   swipeLeft: function(e) {
-    World.moveWest();
+    if(World.swipeAllowed(e)) World.moveWest();
   },
 
   swipeRight: function(e) {
-    World.moveEast();
+    if(World.swipeAllowed(e)) World.moveEast();
   },
 
   swipeUp: function(e) {
-    World.moveNorth();
+    if(World.swipeAllowed(e)) World.moveNorth();
   },
 
   swipeDown: function(e) {
-    World.moveSouth();
+    if(World.swipeAllowed(e)) World.moveSouth();
+  },
+
+  // On-screen arrows for touch screens (css/mobile.css decides when they
+  // show). They drive the world map and, later, the ship in Space.
+  createDpad: function() {
+    if($('#dpad').length) {
+      return;
+    }
+    var dpad = $('<div>').attr('id', 'dpad').appendTo('body');
+    var dirs = [
+      ['north', '\u2191', World.moveNorth, 'up'],
+      ['west', '\u2190', World.moveWest, 'left'],
+      ['south', '\u2193', World.moveSouth, 'down'],
+      ['east', '\u2192', World.moveEast, 'right']
+    ];
+    $.each(dirs, function(i, d) {
+      var release = function() {
+        if(typeof Space != 'undefined') {
+          Space[d[3]] = false;
+        }
+      };
+      $('<div>')
+        .addClass('button dpad-' + d[0])
+        .attr({'aria-label': d[0], role: 'button'})
+        .text(d[1])
+        .on('pointerdown', function(e) {
+          e.preventDefault();
+          if(Engine.keyLock) {
+            return;
+          }
+          if(Engine.activeModule === World) {
+            d[2]();
+          } else if(typeof Space != 'undefined' && Engine.activeModule === Space) {
+            Space[d[3]] = true;
+          }
+        })
+        .on('pointerup pointercancel pointerleave', release)
+        .appendTo(dpad);
+    });
+  },
+
+  // Phones: shrink the map font until all 61 columns fit the screen width.
+  fitMap: function() {
+    var map = $('#map');
+    if(!map.length) {
+      return;
+    }
+    map.css('font-size', '');
+    if(!Engine.isNarrow()) {
+      return;
+    }
+    var avail = $('#worldPanel').width() - 2;
+    var width = map[0].scrollWidth;
+    if(width > 0 && avail > 0) {
+      var size = parseFloat(map.css('font-size')) * avail / width;
+      map.css('font-size', Math.min(16, Math.floor(size * 10) / 10) + 'px');
+    }
+  },
+
+  // Phones: keep the wanderer on screen above the arrows after a move.
+  keepPlayerVisible: function() {
+    if(!Engine.isNarrow()) {
+      return;
+    }
+    var me = $('#map .landmark').filter(function() {
+      return this.firstChild && this.firstChild.nodeValue === '@';
+    })[0];
+    if(!me) {
+      return;
+    }
+    var rect = me.getBoundingClientRect();
+    var bottom = window.innerHeight - ($('#dpad').outerHeight() || 0) - 16;
+    if(rect.top < 0 || rect.bottom > bottom) {
+      window.scrollBy(0, rect.top - Math.max(40, (bottom - 40) / 2));
+    }
   },
 
   click: function(event) {
@@ -1092,6 +1176,7 @@ var World = {
     World.dead = false;
     $('div#bagspace-world > div').empty();
     World.updateSupplies();
+    World.fitMap();
     $('#bagspace-world').width($('#map').width());
   },
 
