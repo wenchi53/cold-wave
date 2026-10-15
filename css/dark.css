@@ -197,3 +197,7 @@ body.noMask #buttons > .button {
 .logo-icon > path {
   stroke: white;
 }
+
+#dpad .button {
+	background-color: rgba(39, 40, 35, 0.9);
+}
