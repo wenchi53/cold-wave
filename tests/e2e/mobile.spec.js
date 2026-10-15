@@ -140,12 +140,15 @@ test('village, path and world map fit the screen', async ({ page, isMobile }, te
 	await dismissSoundEvent(page);
 	await page.locator('#lightButton').click();
 
+	// Getting a compass makes the game open the path by itself
+	// (Room.updateStoresView -> Path.openPath), so only the forest is opened here.
 	await page.evaluate(() => {
 		$SM.setM('stores', { wood: 500, fur: 200, meat: 100, 'cured meat': 30, compass: 1 });
 		Outside.init();
-		Path.init();
-		Engine.travelTo(Outside);
 	});
+	await page.waitForFunction(() => !!Path.tab);
+	expect(await page.locator('#pathPanel').count(), 'path panel is created once').toBe(1);
+	await page.evaluate(() => Engine.travelTo(Outside));
 	await expect(page.locator('#outsidePanel')).toBeVisible();
 	await settle(page);
 	await expectNoHorizontalScroll(page);
