@@ -1,0 +1,475 @@
+/*
+ * Phone / narrow-window layout and touch controls.
+ *
+ * The desktop game is a fixed 920px wide grid of absolutely positioned
+ * boxes. Below 940px (keep in sync with Engine.NARROW_QUERY) everything
+ * becomes one column: notifications on top, then the tabs, then the active
+ * panel, then the menu. Desktop rules above that width are not touched.
+ */
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+/* Tap the "language." entry to open the list (hover does it on desktop) */
+.customSelect.open .customSelectOptions > ul {
+	max-height: 600px;
+}
+
+/* A tapped row shows its tooltip (see Engine.initTouch) */
+body .tooltipOpen > div.tooltip {
+	display: block !important;
+}
+
+/* On-screen arrows: hidden unless a touch screen or narrow window */
+#dpad {
+	display: none;
+}
+
+@media (max-width: 939px), (pointer: coarse) {
+	body.inWorld #dpad, body.inSpace #dpad {
+		display: grid;
+		grid-template-columns: repeat(3, 64px);
+		grid-template-rows: 52px 52px;
+		gap: 6px;
+		position: fixed;
+		/* clear of the fixed desktop menu on large touch screens */
+		bottom: 48px;
+		right: 12px;
+		z-index: 15;
+		touch-action: none;
+	}
+
+	#dpad .button {
+		/* lang/xx/main.css force button widths with !important */
+		width: auto !important;
+		margin: 0;
+		padding: 0;
+		font-size: 26px;
+		line-height: 50px;
+		background-color: rgba(255, 255, 255, 0.9);
+		touch-action: none;
+	}
+
+	#dpad .dpad-north { grid-column: 2; grid-row: 1; }
+	#dpad .dpad-west  { grid-column: 1; grid-row: 2; }
+	#dpad .dpad-south { grid-column: 2; grid-row: 2; }
+	#dpad .dpad-east  { grid-column: 3; grid-row: 2; }
+
+	body.inSpace #dpad .button {
+		background-color: transparent;
+		border-color: #999;
+		color: #999;
+	}
+}
+
+@media (max-width: 939px) {
+	html, body {
+		/* double-tap zoom gets in the way of tapping buttons quickly */
+		touch-action: manipulation;
+	}
+
+	.logo {
+		display: none;
+	}
+
+	body.inWorld #dpad, body.inSpace #dpad {
+		bottom: 12px;
+		left: 50%;
+		right: auto;
+		margin-left: -102px;
+	}
+
+	/* --- frame --- */
+
+	div#wrapper {
+		display: flex;
+		flex-direction: column;
+		box-sizing: border-box;
+		width: auto;
+		max-width: 716px;
+		padding: 8px 8px 0;
+	}
+
+	div#notifications {
+		order: -1;
+		position: relative;
+		top: 0;
+		width: auto;
+		height: 5.6em;
+		margin-bottom: 8px;
+	}
+
+	div#content {
+		height: auto;
+		overflow-x: hidden;
+		overflow-x: clip;
+		overflow-y: visible;
+	}
+
+	div#outerSlider, div#locationSlider {
+		position: relative;
+		display: flow-root;
+	}
+
+	div#outerSlider > div {
+		height: auto;
+		overflow: visible;
+	}
+
+	/* only the panel on screen takes up height */
+	div#outerSlider > div:not(.activePanel),
+	div#locationSlider > div.location:not(.activePanel) {
+		height: 0 !important;
+		overflow: hidden;
+	}
+
+	div#outerSlider > #spacePanel {
+		width: 700px;
+		height: 700px !important;
+	}
+
+	body:not(.inSpace) #spacePanel {
+		visibility: hidden;
+	}
+
+	div.location {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		padding-bottom: 16px;
+	}
+
+	div.location > div {
+		max-width: 100%;
+	}
+
+	/* --- tabs --- */
+
+	div#header {
+		height: auto;
+		padding-bottom: 12px;
+		display: flex;
+		flex-wrap: wrap;
+	}
+
+	div.headerButton {
+		float: none;
+		padding: 12px 10px;
+		margin-left: 0;
+		line-height: 20px;
+	}
+
+	div.headerButton:first-child {
+		padding-left: 0;
+	}
+
+	/* --- buttons --- */
+
+	#wrapper div.button {
+		box-sizing: border-box;
+		width: calc(50% - 4px) !important;
+		min-height: 44px;
+		padding: 11px 6px;
+		margin: 0 0 8px 0;
+		line-height: 20px;
+	}
+
+	/* costs are shown inside the button instead of on hover */
+	#wrapper div.button > div.tooltip {
+		display: block !important;
+		position: static;
+		width: auto !important;
+		margin-top: 4px;
+		padding: 0;
+		border: none;
+		box-shadow: none;
+		background: transparent;
+		font-size: 13px;
+		line-height: 16px;
+		overflow: hidden;
+		color: inherit;
+	}
+
+	div.tooltip {
+		box-sizing: border-box;
+		max-width: calc(100vw - 32px);
+	}
+
+	/* button groups: two per row */
+	div#buildBtns, div#craftBtns, div#buyBtns, div#fabricateButtons,
+	div#workers, div#village, div#perks, div#blueprints, div#storesContainer {
+		position: relative !important;
+		top: auto !important;
+		left: auto !important;
+		right: auto !important;
+		align-self: stretch;
+		width: auto !important;
+		margin-top: 24px;
+	}
+
+	div#buildBtns, div#craftBtns, div#buyBtns, div#fabricateButtons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 8px;
+		align-items: flex-start;
+	}
+
+	div#buildBtns:before, div#craftBtns:before, div#buyBtns:before, div#fabricateButtons::before {
+		flex-basis: 100%;
+		top: 0;
+		margin-bottom: 6px;
+	}
+
+	/* the stores box follows the active panel (Engine.applyActiveLayout) */
+	div#storesContainer {
+		order: 10;
+	}
+
+	div#stores, div#weapons, div#village, div#perks, div#blueprints, #outfitting {
+		box-sizing: border-box;
+		width: auto;
+	}
+
+	div.storeRow, div.perkRow, div.blueprintRow {
+		padding: 3px 0;
+	}
+
+	/* --- outside: workers with bigger +/- --- */
+
+	/* action buttons first, then workers, then the village box */
+	div#workers {
+		order: 1;
+		margin-top: 16px;
+	}
+
+	div#village {
+		order: 2;
+		margin-top: 32px;
+	}
+
+	.workerRow, div.outfitRow {
+		min-height: 48px;
+		line-height: 48px;
+		margin: 0;
+	}
+
+	.workerRow > .row_val, div.outfitRow > .row_val {
+		position: relative;
+		height: 48px;
+		padding-right: 78px;
+	}
+
+	.upBtn, .dnBtn, .upManyBtn, .dnManyBtn {
+		width: 34px;
+		height: 23px;
+	}
+
+	.upBtn, .dnBtn {
+		right: 38px;
+	}
+
+	.upManyBtn, .dnManyBtn {
+		right: 0;
+	}
+
+	.upBtn, .upManyBtn {
+		top: 0;
+	}
+
+	.dnBtn, .dnManyBtn {
+		top: auto;
+		bottom: 0;
+	}
+
+	.upBtn:before, .dnBtn:before, .upManyBtn:before, .dnManyBtn:before {
+		border-width: 9px;
+		margin-left: -9px;
+	}
+
+	.upBtn:after, .dnBtn:after {
+		border-width: 6px;
+		margin-left: -6px;
+	}
+
+	.upManyBtn:after, .dnManyBtn:after {
+		border-width: 4px;
+		margin-left: -4px;
+	}
+
+	/* --- path --- */
+
+	#pathScroller {
+		top: 0;
+		width: auto;
+		max-height: none;
+		overflow: visible;
+		align-self: stretch;
+	}
+
+	#outfitting {
+		margin-top: 8px;
+	}
+
+	/* --- world map --- */
+
+	div#worldPanel.activePanel {
+		/* room to scroll the map above the fixed arrows */
+		padding-bottom: 140px;
+	}
+
+	#worldOuter {
+		display: block;
+	}
+
+	#bagspace-world {
+		width: auto !important;
+		height: auto;
+		min-height: 62px;
+	}
+
+	#map {
+		/* font-size is set by World.fitMap so 61 columns fit */
+		letter-spacing: 0;
+		line-height: 0.625em;
+		touch-action: none;
+	}
+
+	/* --- events --- */
+
+	.eventPanel {
+		position: fixed;
+		top: 8px;
+		left: 8px;
+		right: 8px;
+		width: auto !important;
+		max-height: calc(100% - 16px);
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		box-sizing: border-box;
+		padding: 14px;
+		border: 2px solid black;
+		box-shadow: 5px 5px 5px #666666;
+	}
+
+	.eventPanel:before {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.eventPanel:after {
+		display: none;
+	}
+
+	body.noMask .eventPanel {
+		border-color: white;
+	}
+
+	.eventTitle {
+		position: relative;
+		top: 0;
+		display: block;
+		margin-bottom: 12px;
+	}
+
+	#description textarea {
+		box-sizing: border-box;
+		height: 160px;
+	}
+
+	#event #buttons, #lootButtons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 8px;
+		align-items: flex-start;
+	}
+
+	#lootButtons {
+		margin-top: 32px;
+	}
+
+	/* combat: weapons and healing each get their own rows */
+	#event #attackButtons, #event #healButtons {
+		flex-basis: 100%;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 8px;
+	}
+
+	#wrapper .eventPanel div.button {
+		float: none;
+		margin: 0 0 8px 0;
+	}
+
+	#dropMenu {
+		max-width: calc(100vw - 48px);
+	}
+
+	#dropMenu > div {
+		padding: 10px 8px;
+	}
+
+	/* --- menu: back in the page flow, at the bottom --- */
+
+	.menu {
+		position: static;
+		display: flex;
+		flex-wrap: wrap;
+		padding: 8px 4px 24px;
+	}
+
+	.menu > span {
+		float: none;
+		margin-left: 0;
+		padding: 12px 10px;
+		line-height: 20px;
+	}
+
+	.customSelect {
+		height: auto;
+	}
+
+	span.customSelectOptions, .customSelectOptions > ul {
+		width: auto;
+	}
+
+	.customSelectOptions > ul {
+		position: static;
+		max-height: none;
+		transition: none;
+	}
+
+	.customSelectOptions > ul > li {
+		display: none;
+		height: auto;
+		padding: 0;
+	}
+
+	.customSelectOptions > ul > li:first-child,
+	.customSelect.open .customSelectOptions > ul > li {
+		display: inline-block;
+	}
+
+	.customSelect.open {
+		flex-basis: 100%;
+	}
+
+	.customSelect.open .customSelectOptions > ul > li {
+		padding: 10px 12px 10px 0;
+	}
+
+	/* --- end of the game --- */
+
+	.outroContainer {
+		width: auto;
+		padding: 10% 16px 0;
+	}
+
+	#theEnd {
+		margin-left: 0;
+	}
+}
